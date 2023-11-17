@@ -91,33 +91,44 @@ if __name__ == '__main__':
     # 이동 평균 관련 변수
     window = 5
     init_altitude = 0  # 기준 영점
-    threshold = 3 # 이상치 임계값
-    no_deploy_altitude = 10
+    threshold = 10 # 이상치 임계값
+    no_deploy_altitude = 3
     moving_averages = []
-    
+
+    falling_count = 0
     # 센서 초기화
     init_buffer = []
     init_times = 50
     for i in range(init_times):init_buffer.append(bmp280.altitude)
-    init_altitude = init_buffer/init_times
-    datas = [init_altitude*5]
+    init_altitude = sum(init_buffer)/init_times
+    datas = []
+    for i in range(20):
+        datas.append(0.1)
+    datas.append(0.2)
     #Bmp280
     while True:
         altitude = bmp280.altitude - init_altitude # 로컬 고도 계산
-
         # 이상치 탐지, Z-score기법 사용
-        mean = np.mean(datas[-5:])
-        std = np.std(datas[-5:])
-        z = (i-mean)/std 
-        print('Z-score : ',round(z, 3),end="  /  ")
-        if z > threshold: print('Detected outlier with : ', altitude)
+        mean = np.mean(datas[-20:])
+        std = np.std(datas[-20:])
+        z = (altitude-mean)/std 
+        print('Z-score : {:.2f}'.format(z))
+        if z > threshold: 
+            print('###########################################Detected outlier with : {:.2f}'.format(altitude))
         else: 
             datas.append(altitude) # 데이터 리스트에 추가
-            moving_averages.append(datas[-window:])
-
+            if len(datas)>20:
+                moving_averages.append(mean)
 
         # 낙하산 사출 조건 검사
-        if  len(moving_averages) > 2 and moving_averages[-2]>moving_averages[-1] and altitude > no_deploy_altitude:
+        if  len(moving_averages) > 5 and moving_averages[-5]>moving_averages[-1]: 
+            falling_count += 1
+            print("DOWN", falling_count)
+        else: 
+            falling_count = 0
+            print("UP", falling_count)
+       
+        if falling_count>5 and moving_averages[-1] > no_deploy_altitude:
             try:
                 # 서보 동작
                 # pwm.ChangeDutyCycle(7.5)
@@ -125,6 +136,7 @@ if __name__ == '__main__':
                 # pwm.ChangeDutyCycle(2.5)
                 # time.sleep(0.5)
                 print("BOOMMMMMMMM!!!!!!!!!!!")
+                time.sleep(1)
                 break
                 # 서보 동작 저장
                 # s.write(f"{datetime.datetime.now()} Servo open log: {cali_altitude} m\n")
@@ -132,7 +144,7 @@ if __name__ == '__main__':
                 GPIO.cleanup()
 
         # 로컬 고도 출력
-        print("Altitude: ", round(altitude, 2))
+        print("Altitude: {:.2f}".format(altitude))
         # 로컬 고도 데이터 저장
         # f.write(f"Calibration altitude: {cali_altitude} m\n")
 input()
