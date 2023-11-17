@@ -7,6 +7,7 @@ import serial
 import datetime
 import multiprocessing
 import sys
+import matplotlib.pyplot as plt
 
 
 
@@ -145,6 +146,14 @@ if __name__ == '__main__':
 
         # 로컬 고도 출력
         print("Altitude: {:.2f}".format(altitude))
+
+        x = datas
+        y = range(len(datas))
+        plt.plot(x, y, color="red")
+        # plt.xlabel("Time(ms)")
+        # plt.ylabel("Newton")
+        # plt.title("Trapezoidal Roul on TMS")
+        plt.show()
         # 로컬 고도 데이터 저장
         # f.write(f"Calibration altitude: {cali_altitude} m\n")
 input()
