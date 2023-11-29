@@ -5,12 +5,14 @@ import RPi.GPIO as GPIO
 import numpy as np
 import serial
 import datetime
-import multiprocessing
+# import multiprocessing 
+from multiprocessing import Process, Value, Array
 import sys
 import matplotlib.pyplot as plt
+import keyboard
 
 # EBIMU 프로세스
-def ebimu_process(n):
+def ebimu_process(n,eb_data_arr):
     # EBIMU 센서 값 저장 파일 이름 생성(당시 시간으로 파일 이름)
     nowTime = str(datetime.datetime.now())
     fileName = nowTime[:10]+"_ebimu_"+nowTime[11:21]
@@ -38,7 +40,11 @@ def ebimu_process(n):
                 buf = buf.replace("b","") 
             
                 # 데이터 파싱
-                try : roll, pitch, yaw, x, y, z = map(float,buf[1:-4].split(','))
+                try : 
+                    roll, pitch, yaw, x, y, z = map(float,buf[1:-4].split(','))
+                    eb_data_arr[0] = x
+                    eb_data_arr[1] = y
+                    eb_data_arr[2] = z
                 except Exception as e:
                     print("Error from data processing : ", e)
                     log.write("Error from data processing : "+str(e)+"\n")
@@ -56,8 +62,29 @@ def ebimu_process(n):
 
 if __name__ == '__main__':
     # EBIMU 프로세스 시작
-    eb_p = multiprocessing.Process(target=ebimu_process, args=(1,))
+    eb_data_arr = Array('i', [0]*3)
+    eb_p = Process(target=ebimu_process, args=(1,))
     eb_p.start()
+
+    # 통신 모듈 연결
+    ser = serial.Serial(
+        port="/dev/ttyAMA0",
+        baudrate=19200,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+        bytesize=serial.EIGHTBITS,
+        timeout=1
+    )
+
+    # 상태 딕셔너리
+    status = {
+        "parachute": "Not yet deploy",  # 예시 데이터, Not yet deploy:사출 전, Deploy:사출 후, Force Deploy:강제 사출 후
+        "way": "",  # 예시 데이터, UP:상승시, DOWN(3):하강시 괄호 안은 카운트
+        "gps": "",  # 예시 데이터, 212, 222: 위도, 경도
+        "ebimu": "",  # 예시 데이터, 120,512,252: x,y,z
+        "bmp": "",  # 예시 데이터,  50: 고도
+        "bno": ""  # 예시 데이터, 20,60,90: 오일러 각도
+    }
 
     WINDOW = 10
     THRESHOLD = 20 # 이상치 임계값
@@ -67,6 +94,7 @@ if __name__ == '__main__':
     datas = []  
     moving_averages = []
     falling_count = 0
+    is_deployed = False
 
     #Bmp280 센서 연결
     i2c = board.I2C()  
@@ -128,17 +156,51 @@ if __name__ == '__main__':
         if  len(moving_averages) > 2 and moving_averages[-2]>moving_averages[-1]: 
             falling_count += 1
             print("DOWN", falling_count)
+            status["way"] = "DOWN("+falling_count+")"
         else: 
             falling_count = 0
             print("UP")
+            status["way"] = "UP"
+            
        
-       # 낙하산 사출 조건 검사
-        if falling_count > FALLING_CONFIRMATION and moving_averages[-1] > NO_DEPLOY_ALTITUDE:
+        # 강제 사출 조건 검사
+        if not is_deployed and ser.in_waiting > 0:
+            read_data = ser.read().decode()
+            if read_data == "E":
+                is_deployed = True
+                status["parachute"] = "Force Deploy"
+                pwm.ChangeDutyCycle(9.5)
+                time.sleep(2)
+                pwm.ChangeDutyCycle(7.5)
+                print("Forced Deploy!")
+                s.write(f"{datetime.datetime.now()} Servo open: {altitude} m\n")
+
+
+        # 낙하산 사출 조건 검사
+        if not is_deployed and falling_count > FALLING_CONFIRMATION and moving_averages[-1] > NO_DEPLOY_ALTITUDE:
+            is_deployed = True
             pwm.ChangeDutyCycle(9.5)
             time.sleep(2)
             pwm.ChangeDutyCycle(7.5)
             print("Deploy!")
             s.write(f"{datetime.datetime.now()} Servo open: {altitude} m\n")
+
+        # 데이터 전송
+        status["ebimu"] = ",".join(map(str, eb_data_arr))
+        status["bmp"] = str(altitude)
+
+        # 딕셔너리값 리스트화
+        try:
+            status_values = list(status.values())
+            total_message = "/".join(map(str, status_values)) + ";"
+            for i in range(0, len(total_message), 50):
+                message = total_message[i:i + 50]
+                ser.write(message.encode())
+                print("ok")
+        except:
+            print("Fail send message")
+        
+        if keyboard.is_pressed("space"):
             break
         
 
