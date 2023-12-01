@@ -1,5 +1,4 @@
 import time
-# import serial
 import keyboard
 import os
 
@@ -15,7 +14,6 @@ if not IS_TEST:
         bytesize=serial.EIGHTBITS,
         timeout=1
     )
-IS_TEST = True
 HOLD_TIME = 1
 buffer = ""
 current_time = time.time()
