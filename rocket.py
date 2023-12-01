@@ -11,6 +11,20 @@ import matplotlib.pyplot as plt
 import keyboard
 import os
 
+import serial
+from pyubx2 import UBXReader
+
+# stream = serial.Serial("/dev/tty.usbmodem11301", baudrate=19200, timeout=1)
+# ubr = UBXReader(stream)
+
+# with open("gps.txt", "a") as file:
+#     while True:
+#         (raw_data, parsed_data) = ubr.read()
+#         print(parsed_data)
+
+#         # Write parsed_data to the file
+#         file.write(str(parsed_data) + "\n")
+
 def ebimu_process(n,eb_data_arr):
 
     ############################## 파일 생성 #################################
