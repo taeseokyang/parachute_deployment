@@ -131,6 +131,7 @@ if __name__ == '__main__':
     falling_count = 0
     is_deployed = False
     is_outlier = False
+    is_valid_falling = False
     
     ################################# 파일 생성 ###################################
 
@@ -194,14 +195,22 @@ if __name__ == '__main__':
 
         ################################## 방향 판단 ###################################
 
+        if moving_averages[-1] > NO_DEPLOY_ALTITUDE:
+            is_valid_falling = True
+
         if  len(moving_averages) > 2 and moving_averages[-2]>moving_averages[-1]: 
-            falling_count += 1
+
+            if is_valid_falling:
+                falling_count += 1
+                status["way"] = "DOWN("+str(falling_count)+")"
+            else:
+                status["way"] = "DOWN(invalid)"
+
             print("DOWN", falling_count)
-            status["way"] = "DOWN("+str(falling_count)+")"
         else: 
             falling_count = 0
             print("UP")
-            status["way"] = "UP"
+            status["way"] = "UP("+str(is_valid_falling)+")"
             
         ############################# 강제 사출 조건 검사 #################################    
 
@@ -223,7 +232,7 @@ if __name__ == '__main__':
 
         ############################# 자동 사출 조건 검사 #################################   
 
-        if not is_deployed and falling_count > FALLING_CONFIRMATION and moving_averages[-1] > NO_DEPLOY_ALTITUDE:
+        if not is_deployed and falling_count > FALLING_CONFIRMATION:
             is_deployed = True
             status["parachute"] = "1"
             pwm.ChangeDutyCycle(9.5)
