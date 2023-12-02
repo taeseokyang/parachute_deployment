@@ -221,7 +221,6 @@ if __name__ == '__main__':
                 print("Forced Deploy!")
                 s.write(f"{datetime.datetime.now()} Servo open: {altitude} m, Type: Force\n")
 
-
         ############################# 자동 사출 조건 검사 #################################   
 
         if not is_deployed and falling_count > FALLING_CONFIRMATION and moving_averages[-1] > NO_DEPLOY_ALTITUDE:

@@ -11,7 +11,7 @@ ser = serial.Serial(
     timeout=1
 )
 
-HOLD_TIME = 1
+HOLD_TIME = 0.5
 buffer = ""
 current_time = time.time()
 is_first_press = True
@@ -59,9 +59,10 @@ while True:
             print(f"Left time: {abs(HOLD_TIME-time_pressed):.1f}s")
             if time_pressed >= HOLD_TIME:
                 print("Sended Ejection Message")
-                ser.write(("<E>"*17+"\r\n").encode())
+                for i in range(3):
+                    ser.write(("<E>"*17+"\r\n").encode())
                 is_first_press = True
-                time.sleep(1)
+                time.sleep(0.1)
     elif keyboard.is_pressed("t"): # 키 입력 테스트
         print("Key input confirmed")
     else:
