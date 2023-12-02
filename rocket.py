@@ -5,27 +5,15 @@ import RPi.GPIO as GPIO
 import numpy as np
 import serial
 import datetime
-from multiprocessing import Process, Array
+from multiprocessing import Process
 import sys
 import matplotlib.pyplot as plt
 import keyboard
 import os
-
-import serial
 from pyubx2 import UBXReader
 
-# stream = serial.Serial("/dev/tty.usbmodem11301", baudrate=19200, timeout=1)
-# ubr = UBXReader(stream)
 
-# with open("gps.txt", "a") as file:
-#     while True:
-#         (raw_data, parsed_data) = ubr.read()
-#         print(parsed_data)
-
-#         # Write parsed_data to the file
-#         file.write(str(parsed_data) + "\n")
-
-def ebimu_process(n,eb_data_arr):
+def ebimu_process(n):
 
     ############################## 파일 생성 #################################
 
@@ -55,10 +43,8 @@ def ebimu_process(n,eb_data_arr):
             
                 try : 
                     roll, pitch, yaw, x, y, z = map(float,buf[1:-4].split(','))
-                    eb_data_arr[0] = x
-                    eb_data_arr[1] = y
-                    eb_data_arr[2] = z
                 except Exception as e:
+                    #print(buf)
                     print("Error from data processing : ", e)
                     log.write("Error from data processing : "+str(e)+"\n With '"+buf+"'\n")
                     buf = ""
@@ -68,7 +54,7 @@ def ebimu_process(n,eb_data_arr):
                 writeString = "*"+str(datas)[1:-1]+"\n"
                 f.write(writeString)
                 
-                # print(roll,pitch,yaw,x,y,z)
+                print(roll,pitch,yaw,x,y,z)
                 buf = ""
 
 if __name__ == '__main__':
@@ -87,6 +73,12 @@ if __name__ == '__main__':
         time.sleep(0.1)
 
     ############################## 부품 연결과 설정 #################################
+
+    stream = serial.Serial("/dev/ttyACM0", baudrate=19200, timeout=1)
+    ubr = UBXReader(stream)
+
+    gf =  open("gps.txt", "a")
+
 
     # 통신 모듈 연결
     ser = serial.Serial(
@@ -123,12 +115,10 @@ if __name__ == '__main__':
 
     # 상태 딕셔너리
     status = {
-        "parachute": "Not yet deploy",  # 예시 데이터, Not yet deploy:사출 전, Deploy:사출 후, Force Deploy:강제 사출 후
+        "parachute": "0",  # 예시 데이터, Not yet deploy:사출 전, Deploy:사출 후, Force Deploy:강제 사출 후
         "way": "DOWN",  # 예시 데이터, UP:상승시, DOWN(3):하강시 괄호 안은 카운트
-        "gps": "0, 0",  # 예시 데이터, 212, 222: 위도, 경도
-        "ebimu": "0, 0, 0",  # 예시 데이터, 120,512,252: x,y,z
+        "ebimu": "-",  # 예시 데이터, 120,512,252: x,y,z
         "bmp": "0",  # 예시 데이터,  50: 고도
-        "bno": "0, 0, 0"  # 예시 데이터, 20,60,90: 오일러 각도
     }
 
     WINDOW = 20
@@ -167,13 +157,21 @@ if __name__ == '__main__':
 
     ############################# EBIMU 프로세스 시작 ###############################
 
-    eb_data_arr = Array('i', [0]*3)
-    eb_p = Process(target=ebimu_process, args=(1,eb_data_arr))
+    eb_p = Process(target=ebimu_process, args=(1,))
     eb_p.start()
 
     ################################## 실행 로직 ###################################
 
     while True:
+
+        try:
+            (raw_data, parsed_data) = ubr.read()
+            print(parsed_data)
+            # Write parsed_data to the file
+            gf.write(str(parsed_data) + "\n")
+        except:
+            print("GPS Fail")
+            gf.write("GPS Fail \n")
 
         ################################## 고도 수집 ###################################
 
@@ -210,12 +208,14 @@ if __name__ == '__main__':
 
         if ser.in_waiting > 0:
             try:
-                read_data = ser.read().decode()
+                read_data = ser.readline().decode()
+                print("Received: '"+read_data+"'")
             except:
                 read_data = " "
-            if read_data == "E":
-                # is_deployed = True
-                status["parachute"] = "Force Deployed"
+                print("Received a word but Fail to decode")
+            time.sleep(1)
+            if 'E' in read_data:
+                status["parachute"] = "2"
                 pwm.ChangeDutyCycle(9.5)
                 time.sleep(2)
                 pwm.ChangeDutyCycle(7.5)
@@ -227,7 +227,7 @@ if __name__ == '__main__':
 
         if not is_deployed and falling_count > FALLING_CONFIRMATION and moving_averages[-1] > NO_DEPLOY_ALTITUDE:
             is_deployed = True
-            status["parachute"] = "Deployed"
+            status["parachute"] = "1"
             pwm.ChangeDutyCycle(9.5)
             time.sleep(2)
             pwm.ChangeDutyCycle(7.5)
@@ -236,18 +236,16 @@ if __name__ == '__main__':
 
         ############################### 통신 데이터 가공 ###################################   
 
-        status["ebimu"] = ", ".join(map(str, eb_data_arr))
+        # status["ebimu"] = ", ".join(map(str, eb_data_arr))
         status["bmp"] = str(int(altitude))
 
         # 추가해야함.
-        status["gps"] = "No data"
-        status["bno"] = "No data"
 
         try:
             status_values = list(status.values())
             total_message = "/".join(map(str, status_values)) + ";"
-            for i in range(0, len(total_message), 50):
-                message = total_message[i:i + 50]
+            for i in range(0, len(total_message), 55):
+                message = total_message[i:i + 55]
                 ser.write(message.encode())
                 print("ok")
         except:
@@ -259,7 +257,7 @@ if __name__ == '__main__':
         
 ############################### 그래프 출력 ###################################
 
-SHOW_GRAPH = True
+SHOW_GRAPH = False
 if SHOW_GRAPH:
     y = datas[WINDOW:]
     x = range(WINDOW//2,len(datas)-WINDOW+WINDOW//2)
