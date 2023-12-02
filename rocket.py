@@ -122,7 +122,6 @@ if __name__ == '__main__':
     }
 
     WINDOW = 20
-    THRESHOLD = 20 # 이상치 임계값
     NO_DEPLOY_ALTITUDE = 1
     FALLING_CONFIRMATION = 10
     ESTIMATED_MAX_ALTITUDE = 400
@@ -178,7 +177,7 @@ if __name__ == '__main__':
         # 로컬 고도 계산
         altitude = bmp280.altitude - init_altitude 
         # 이상치 판단
-        if -1 <= altitude <= ESTIMATED_MAX_ALTITUDE :
+        if -10 <= altitude <= ESTIMATED_MAX_ALTITUDE :
             is_outlier = False
         else:
             is_outlier = True
