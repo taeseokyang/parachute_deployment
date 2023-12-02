@@ -214,7 +214,7 @@ if __name__ == '__main__':
                 read_data = " "
                 print("Received a word but Fail to decode")
             time.sleep(1)
-            if 'E' in read_data:
+            if "<E>" in read_data:
                 status["parachute"] = "2"
                 pwm.ChangeDutyCycle(9.5)
                 time.sleep(2)
